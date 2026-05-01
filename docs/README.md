@@ -6,7 +6,7 @@ A feedforward neural network built from scratch in [Luma](https://luma-website-m
 
 ```
 inputs → [ hidden layers ] → output
-  2    →   5  →  10        →   1
+  2    →   5  →  5        →   1
 ```
 
 Each layer is fully connected to the next. Every connection has a weight, every non-input node has a bias.
