@@ -1,0 +1,144 @@
+@module "layer"
+
+@use "std_libc" as libc
+
+@use "helper" as helper
+
+pub const Layer -> struct {
+    num_inputs:  int,
+    num_outputs: int,
+
+    weights: *float,
+    biases:  *float,
+    z:       *float, // pre-activation: W*a + b
+    outputs: *float, // post-activation: g(z) this is a[l];
+
+    next: *Layer,
+
+    init_weights_biases -> fn () void {
+        let limit: float = 1.0 / libc::sqrt(cast<double>(self.num_inputs));
+        let n: int = self.num_inputs * self.num_outputs;
+        loop [i: int = 0](i < n) : (++i) {
+            self.weights[i] = helper::random_float(-limit, limit);
+        }
+
+        loop [j: int = 0](j < self.num_outputs) : (++j) {
+            self.biases[j] = 0.0;
+        } 
+    },
+
+    forward -> fn (inputs: *float) void {
+        // Calculate z[l] = W * inputs + b 
+        loop [j: int = 0](j < self.num_outputs) : (++j) {
+            let sum: float = self.biases[j];
+            
+            loop [i: int = 0](i < self.num_inputs) : (++i) {
+                let tmp: float = self.weights[i * self.num_outputs + j];
+                sum = sum + inputs[i] * tmp;
+            }
+
+            self.z[j] = sum;
+        }
+
+        // Calculate a[l] = g(z[l]) using sigmoid
+        loop [j: int = 0](j < self.num_outputs) : (++j) {
+            self.outputs[j] = helper::sigmoid(self.z[j]);
+        }
+    },
+
+    print_forward -> fn () void {
+        output("  z = [ ");
+        loop [j: int = 0](j < self.num_outputs) : (++j) {
+            output(self.z[j]);
+            if (j < self.num_outputs - 1) output(", ");
+        }
+        output(" ]\n");
+
+        output("  a = [ ");
+        loop [j: int = 0](j < self.num_outputs) : (++j) {
+            output(self.outputs[j]);
+            if (j < self.num_outputs - 1) output(", ");
+        }
+        output(" ]\n");
+    },
+
+    print_weights -> fn () void {
+        output("  w = [ ");
+        loop [i: int = 0](i < self.num_inputs * self.num_outputs) : (++i) {
+            output(self.weights[i]);
+            if (i < self.num_inputs * self.num_outputs - 1) output(", ");
+        }
+        output(" ]\n");
+
+        output("  b = [ ");
+        loop [j: int = 0](j < self.num_outputs) : (++j) {
+            output(self.biases[j]);
+            if (j < self.num_outputs - 1) output(", ");
+        }
+        output(" ]\n");
+    },
+};
+
+pub const LayerIterable -> struct {
+    head: *Layer,
+    current: *Layer,
+    count: int,
+
+    next -> fn () *Layer {
+        if (self.current == cast<*Layer>(0)) return cast<*Layer>(0);
+
+        let layer: *Layer = self.current;
+        self.current = self.current.next;
+        self.count = self.count + 1;
+        return layer;
+    },
+
+    has_next -> fn () bool { return self.current != cast<*Layer>(0); },
+    reset -> fn () void {
+        self.current = self.head;
+        self.count = 0;
+    }
+};
+
+#returns_ownership
+pub const init_layer -> fn (num_inputs: int, num_outputs: int) Layer {
+    return Layer {
+        num_inputs: num_inputs,
+        num_outputs: num_outputs,
+        weights: cast<*float>(alloc(num_inputs * num_outputs * sizeof<float>)),
+        biases:  cast<*float>(alloc(num_outputs * sizeof<float>)),
+        z:       cast<*float>(alloc(num_outputs * sizeof<float>)),
+        outputs: cast<*float>(alloc(num_outputs * sizeof<float>)),
+        next:    cast<*Layer>(0),
+    };
+}
+
+pub const iter_init -> fn (l: *Layer) LayerIterable {
+    return LayerIterable {
+        head: l,
+        current: l,
+        count: 0,
+    };
+}
+
+#takes_ownership
+pub const free_layer -> fn (l: *Layer) void {
+    free(l.weights);
+    free(l.biases);
+    free(l.outputs);
+    free(l.z);
+
+    if (l.next != cast<*Layer>(0)) {
+        free_layer(l.next);
+        free(l.next);
+    }
+}
+
+pub const mse_loss -> fn (outputs: *float, targets: *float, n: int) float {
+    let sum: float = 0.0;
+    loop [i: int = 0](i < n) : (++i) {
+        let diff: float = outputs[i] - targets[i];
+        sum = sum + diff * diff;
+    }
+    return (sum / cast<float>(n));
+}

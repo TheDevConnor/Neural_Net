@@ -1,0 +1,18 @@
+@module "helper"
+
+@use "std_libc" as libc
+
+const RAND_MAX: float = 2147483647.0;
+
+pub const sigmoid -> fn (x: float) float {
+    let clamped: double = cast<double>(x);
+
+    if (clamped > 500.0)  return 1.0;
+    if (clamped < -500.0) return 0.0; 
+    
+    return cast<float>(1.0 / (1.0 + libc::exp(-clamped))); 
+}
+
+pub const random_float -> fn (min: float, max: float) float {
+    return (cast<float>(libc::rand()) / RAND_MAX) * (max - min) + min;
+}
