@@ -8,8 +8,8 @@
 pub const main -> fn () int {
     libc::srand(libc::time(cast<*int>(0)));
 
-    let inputs: [double; 2] = [1.0, 0.0];
-    let targets: [double; 1] = [1.0];
+    let inputs: [double; 2] = [100.0, 0.0];
+    let targets: [double; 1] = [50.0];
 
     // 2 | 5 5 | 1
     let initial_layer: Layer = layer::init_layer(2, 5);
@@ -23,6 +23,14 @@ pub const main -> fn () int {
 
     initial_layer.next = &hidden_layer;
     hidden_layer.next  = &output_layer; 
+    layer::link_layers(&initial_layer);
+
+    if (initial_layer.prev == cast<*Layer>(0))
+        output("Initial layer prev is null\n");
+    if (hidden_layer.prev != cast<*Layer>(0))
+        output("Hidden layer prev is not null\n");
+    if (output_layer.prev != cast<*Layer>(0))
+        output("Output layer prev is not null\n");
 
     let it: LayerIterable = layer::iter_init(&initial_layer);
     let current_inputs: *float = &inputs[0];

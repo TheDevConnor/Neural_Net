@@ -13,6 +13,7 @@ pub const Layer -> struct {
     z:       *double,
     outputs: *double,
 
+    prev: *Layer,
     next: *Layer,
 
     init_weights_biases -> fn () void {
@@ -86,8 +87,20 @@ pub const init_layer -> fn (num_inputs: int, num_outputs: int) Layer {
         biases:  cast<*double>(alloc(num_outputs * sizeof<double>)),
         z:       cast<*double>(alloc(num_outputs * sizeof<double>)),
         outputs: cast<*double>(alloc(num_outputs * sizeof<double>)),
+        prev:    cast<*Layer>(0),
         next:    cast<*Layer>(0),
     };
+}
+
+pub const link_layers -> fn (head: *Layer) void {
+    let current: *Layer = head;
+    loop (current != cast<*Layer>(0)) {
+        if (current.next != cast<*Layer>(0)) {
+            let tmp: *Layer = current.next;
+            tmp.prev = current;
+        }
+        current = current.next;
+    }
 }
 
 pub const iter_init -> fn (l: *Layer) LayerIterable {
