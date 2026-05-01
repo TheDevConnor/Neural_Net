@@ -8,13 +8,14 @@
 pub const main -> fn () int {
     libc::srand(libc::time(cast<*int>(0)));
 
-    let inputs: [float; 2] = [1.0, 0.0];
-    let targets: [float; 1] = [1.0];
+    let inputs: [double; 2] = [1.0, 0.0];
+    let targets: [double; 1] = [1.0];
 
     // 2 | 5 5 | 1
     let initial_layer: Layer = layer::init_layer(2, 5);
     let hidden_layer:  Layer = layer::init_layer(5, 5);
     let output_layer:  Layer = layer::init_layer(5, 1);
+    defer { layer::free_layer(&initial_layer); }
 
     initial_layer.init_weights_biases();
     hidden_layer.init_weights_biases();
@@ -37,7 +38,7 @@ pub const main -> fn () int {
     }
 
     let output_value: float = output_layer.outputs[0];
-    let loss: float = layer::mse_loss(output_layer.outputs, &targets[0], 1);
+    let loss: double = layer::mse_loss(output_layer.outputs, &targets[0], 1);
     output("Loss: ", loss, "\n");
 
     return 0;

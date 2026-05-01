@@ -8,39 +8,32 @@ pub const Layer -> struct {
     num_inputs:  int,
     num_outputs: int,
 
-    weights: *float,
-    biases:  *float,
-    z:       *float, // pre-activation: W*a + b
-    outputs: *float, // post-activation: g(z) this is a[l];
+    weights: *double,
+    biases:  *double,
+    z:       *double,
+    outputs: *double,
 
     next: *Layer,
 
     init_weights_biases -> fn () void {
-        let limit: float = 1.0 / libc::sqrt(cast<double>(self.num_inputs));
+        let limit: double = 1.0 / libc::sqrt(cast<double>(self.num_inputs));
         let n: int = self.num_inputs * self.num_outputs;
         loop [i: int = 0](i < n) : (++i) {
-            self.weights[i] = helper::random_float(-limit, limit);
+            self.weights[i] = helper::random_double(-limit, limit);
         }
-
         loop [j: int = 0](j < self.num_outputs) : (++j) {
             self.biases[j] = 0.0;
-        } 
+        }
     },
 
-    forward -> fn (inputs: *float) void {
-        // Calculate z[l] = W * inputs + b 
+    forward -> fn (inputs: *double) void {
         loop [j: int = 0](j < self.num_outputs) : (++j) {
-            let sum: float = self.biases[j];
-            
+            let sum: double = self.biases[j];
             loop [i: int = 0](i < self.num_inputs) : (++i) {
-                let tmp: float = self.weights[i * self.num_outputs + j];
-                sum = sum + inputs[i] * tmp;
+                sum = sum + inputs[i] * self.weights[i * self.num_outputs + j];
             }
-
             self.z[j] = sum;
         }
-
-        // Calculate a[l] = g(z[l]) using sigmoid
         loop [j: int = 0](j < self.num_outputs) : (++j) {
             self.outputs[j] = helper::sigmoid(self.z[j]);
         }
@@ -57,22 +50,6 @@ pub const Layer -> struct {
         output("  a = [ ");
         loop [j: int = 0](j < self.num_outputs) : (++j) {
             output(self.outputs[j]);
-            if (j < self.num_outputs - 1) output(", ");
-        }
-        output(" ]\n");
-    },
-
-    print_weights -> fn () void {
-        output("  w = [ ");
-        loop [i: int = 0](i < self.num_inputs * self.num_outputs) : (++i) {
-            output(self.weights[i]);
-            if (i < self.num_inputs * self.num_outputs - 1) output(", ");
-        }
-        output(" ]\n");
-
-        output("  b = [ ");
-        loop [j: int = 0](j < self.num_outputs) : (++j) {
-            output(self.biases[j]);
             if (j < self.num_outputs - 1) output(", ");
         }
         output(" ]\n");
@@ -103,12 +80,12 @@ pub const LayerIterable -> struct {
 #returns_ownership
 pub const init_layer -> fn (num_inputs: int, num_outputs: int) Layer {
     return Layer {
-        num_inputs: num_inputs,
+        num_inputs:  num_inputs,
         num_outputs: num_outputs,
-        weights: cast<*float>(alloc(num_inputs * num_outputs * sizeof<float>)),
-        biases:  cast<*float>(alloc(num_outputs * sizeof<float>)),
-        z:       cast<*float>(alloc(num_outputs * sizeof<float>)),
-        outputs: cast<*float>(alloc(num_outputs * sizeof<float>)),
+        weights: cast<*double>(alloc(num_inputs * num_outputs * sizeof<double>)),
+        biases:  cast<*double>(alloc(num_outputs * sizeof<double>)),
+        z:       cast<*double>(alloc(num_outputs * sizeof<double>)),
+        outputs: cast<*double>(alloc(num_outputs * sizeof<double>)),
         next:    cast<*Layer>(0),
     };
 }
@@ -128,17 +105,15 @@ pub const free_layer -> fn (l: *Layer) void {
     free(l.outputs);
     free(l.z);
 
-    if (l.next != cast<*Layer>(0)) {
+    if (l.next != cast<*Layer>(0)) 
         free_layer(l.next);
-        free(l.next);
-    }
 }
 
-pub const mse_loss -> fn (outputs: *float, targets: *float, n: int) float {
-    let sum: float = 0.0;
+pub const mse_loss -> fn (outputs: *double, targets: *double, n: int) double {
+    let sum: double = 0.0;
     loop [i: int = 0](i < n) : (++i) {
-        let diff: float = outputs[i] - targets[i];
+        let diff: double = outputs[i] - targets[i];
         sum = sum + diff * diff;
     }
-    return (sum / cast<float>(n));
+    return sum / cast<double>(n);
 }
