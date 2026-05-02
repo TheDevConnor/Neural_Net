@@ -1,7 +1,6 @@
 @module "layer"
 
 @use "std_libc" as libc
-
 @use "helper" as helper
 
 pub const Layer -> struct {
@@ -64,7 +63,7 @@ pub const Layer -> struct {
         loop [i: int = 0](i < self.num_inputs) : (++i) {
             loop [j: int = 0](j < self.num_outputs) : (++j) {
                 self.grad_w[i * self.num_outputs + j] = inputs[i] * self.deltas[j];
-                self.weights[i * self.num_outputs + j] = self.weights[i * self.num_outputs + j] 
+                self.weights[i * self.num_outputs + j] = self.weights[i * self.num_outputs + j]
                     - learning_rate * self.grad_w[i * self.num_outputs + j];
             }
         }
@@ -91,13 +90,12 @@ pub const Layer -> struct {
 };
 
 pub const LayerIterable -> struct {
-    head: *Layer,
+    head:    *Layer,
     current: *Layer,
-    count: int,
+    count:   int,
 
     next -> fn () *Layer {
         if (self.current == cast<*Layer>(0)) return cast<*Layer>(0);
-
         let layer: *Layer = self.current;
         self.current = self.current.next;
         self.count = self.count + 1;
@@ -105,10 +103,11 @@ pub const LayerIterable -> struct {
     },
 
     has_next -> fn () bool { return self.current != cast<*Layer>(0); },
+
     reset -> fn () void {
         self.current = self.head;
         self.count = 0;
-    }
+    },
 };
 
 #returns_ownership
@@ -140,9 +139,9 @@ pub const link_layers -> fn (head: *Layer) void {
 
 pub const iter_init -> fn (l: *Layer) LayerIterable {
     return LayerIterable {
-        head: l,
+        head:    l,
         current: l,
-        count: 0,
+        count:   0,
     };
 }
 
@@ -150,13 +149,41 @@ pub const iter_init -> fn (l: *Layer) LayerIterable {
 pub const free_layer -> fn (l: *Layer) void {
     free(l.weights);
     free(l.biases);
+    free(l.z);
     free(l.outputs);
     free(l.deltas);
     free(l.grad_w);
-    free(l.z);
 
-    if (l.next != cast<*Layer>(0)) 
+    if (l.next != cast<*Layer>(0))
         free_layer(l.next);
+}
+
+pub const run_forward -> fn (head: *Layer, inputs: *double) void {
+    let it: LayerIterable = iter_init(head);
+    let current: *double = inputs;
+    loop (it.has_next()) {
+        let l: *Layer = it.next();
+        l.forward(current);
+        current = l.outputs;
+    }
+}
+
+pub const run_backward -> fn (out: *Layer, target: *double) void {
+    out.compute_output_delta(target);
+    let back: *Layer = out.prev;
+    loop (back != cast<*Layer>(0)) {
+        back.compute_hidden_delta();
+        back = back.prev;
+    }
+}
+
+pub const run_update -> fn (head: *Layer, inputs: *double, learning_rate: double) void {
+    head.update_weights(inputs, learning_rate);
+    let it: LayerIterable = iter_init(head.next);
+    loop (it.has_next()) {
+        let l: *Layer = it.next();
+        l.update_weights(l.prev.outputs, learning_rate);
+    }
 }
 
 pub const mse_loss -> fn (outputs: *double, targets: *double, n: int) double {

@@ -9,20 +9,27 @@
 5. [Forward Pass](#forward-pass)
 6. [Activation Functions](#activation-functions)
 7. [Loss Function](#loss-function)
-8. [Implementation Reference](#implementation-reference)
+8. [Backpropagation](#backpropagation)
+9. [Gradient Descent](#gradient-descent)
+10. [Training Loop](#training-loop)
+11. [Implementation Reference](#implementation-reference)
 
 ---
 
 ## Notation
 
-| Symbol      | Meaning                                              |
-|-------------|------------------------------------------------------|
-| `l`         | Layer index (0 = input, 1 = first hidden, ...)       |
-| `z^[l]`     | Pre-activation column vector for layer `l`           |
-| `a^[l]`     | Post-activation column vector for layer `l`          |
-| `W^[l]`     | Weight matrix connecting layer `l-1` to layer `l`   |
-| `b^[l]`     | Bias vector for layer `l`                            |
-| `g(z)`      | Activation function applied to `z`                   |
+| Symbol        | Meaning                                              |
+|---------------|------------------------------------------------------|
+| `l`           | Layer index (0 = input, 1 = first hidden, ...)       |
+| `z^[l]`       | Pre-activation column vector for layer `l`           |
+| `a^[l]`       | Post-activation column vector for layer `l`          |
+| `W^[l]`       | Weight matrix connecting layer `l-1` to layer `l`   |
+| `b^[l]`       | Bias vector for layer `l`                            |
+| `g(z)`        | Activation function applied to `z`                   |
+| `g'(z)`       | Derivative of the activation function                |
+| `δ^[l]`       | Delta (error signal) for layer `l`                   |
+| `∂L/∂w`       | Gradient of the loss with respect to a weight        |
+| `α`           | Learning rate                                        |
 
 ---
 
@@ -39,13 +46,13 @@ Layer 0       Layer 1       Layer 2
               o
 ```
 
-Layers are represented as a linked list of `Layer` structs:
+Layers are represented as a doubly linked list of `Layer` structs:
 
 ```
-initial_layer → hidden_layer → output_layer → null
+null ← initial_layer ⇄ hidden_layer ⇄ output_layer → null
 ```
 
-A `LayerIterable` is used to walk the list cleanly during the forward pass.
+The `prev` and `next` pointers allow traversal in both directions — forward for the forward pass, backward for backpropagation. A `LayerIterable` is used to walk the list cleanly.
 
 ---
 
@@ -75,7 +82,7 @@ Weights are initialized to random values in the range:
 
 This prevents activations from exploding or vanishing as the network gets deeper. Larger input layers get smaller initial weights.
 
-### The dot product
+### The Dot Product
 
 For a single output node `j`, its value is the dot product of the input vector and the column of weights for that node:
 
@@ -136,7 +143,7 @@ a^[l] = g(z^[l])
 
 `a^[l]` is the **final** output of the layer, and becomes the input `a^[l-1]` for the next layer.
 
-### Full chain
+### Full Chain
 
 ```
 inputs (a^[0])
@@ -179,6 +186,16 @@ z = 27  →  g(z) ≈ 0.999
 
 Implementation note: clamp `z` to `(-500, 500)` before computing `exp` to prevent float overflow.
 
+### Derivative of Sigmoid
+
+The derivative of sigmoid has a convenient form it can be expressed entirely in terms of the sigmoid output itself:
+
+```
+g'(z) = g(z) × (1 - g(z))
+```
+
+Since `g(z)` is already stored in `outputs` from the forward pass, no recomputation is needed during backpropagation.
+
 ### ReLU (for later)
 
 ```
@@ -205,48 +222,188 @@ For multiple outputs:
 loss = (1/n) × sum((output[i] - target[i])^2)
 ```
 
-A loss of `0` means perfect prediction. A loss of `0.297` (as seen in testing) means the output is off by about `0.545` from the target.
+A loss of `0` means perfect prediction. The loss decreases as the network learns.
+
+---
+
+## Backpropagation
+
+Backpropagation is how the network learns. Given the loss, it computes how much each weight and bias contributed to the error, working **backwards** from the output layer to the input layer using the chain rule.
+
+The chain rule says: if `A` affects `B`, and `B` affects `C`, then how `A` affects `C` is the product of those two relationships. In a neural net the chain is:
+
+```
+weights → z → a → loss
+```
+
+### Delta
+
+For each layer we compute **delta** `δ^[l]`, the error signal for that layer. It represents how much that layer is responsible for the final error.
+
+**Output layer delta:**
+
+```
+δ^[L] = (a^[L] - target) × g'(z^[L])
+```
+
+Expanding `g'` using the sigmoid derivative property:
+
+```
+δ[j] = (outputs[j] - target[j]) × outputs[j] × (1 - outputs[j])
+```
+
+**Hidden layer delta:**
+
+Hidden layers have no target to compare against. Instead the error signal flows backwards from the next layer:
+
+```
+δ^[l] = (W^[l+1]ᵀ · δ^[l+1]) × g'(z^[l])
+```
+
+In code, for each node `i` in the hidden layer:
+
+```
+error[i] = sum over j of (next.weights[i * next.num_outputs + j] * next.deltas[j])
+delta[i] = error[i] * outputs[i] * (1 - outputs[i])
+```
+
+This is why `prev` and `next` pointers are needed. The hidden delta reads from the next layer's weights and deltas while writing to the current layer.
+
+### Weight Gradients
+
+Once deltas are computed, the gradient for each weight is:
+
+```
+∂L/∂w[i][j] = a^[l-1][i] × δ^[l][j]
+```
+
+In code:
+
+```
+grad_w[i * num_outputs + j] = inputs[i] * deltas[j]
+```
+
+The gradient for each bias is simply the delta itself:
+
+```
+∂L/∂b[j] = δ^[l][j]
+```
+
+### Backward Pass Order
+
+```
+output layer   →  compute_output_delta(target)
+hidden layer 2 →  compute_hidden_delta()          (reads from output layer)
+hidden layer 1 →  compute_hidden_delta()          (reads from hidden layer 2)
+...
+```
+
+This is the mirror of the forward pass. The error flows right to left, just as inputs flowed left to right.
+
+---
+
+## Gradient Descent
+
+Once gradients are known, weights and biases are nudged in the direction that reduces the loss:
+
+```
+w = w - α × ∂L/∂w
+b = b - α × ∂L/∂b
+```
+
+Where `α` (learning rate) is a small constant like `0.5` or `1.0` that controls the step size.
+
+- Too large: overshoots the minimum, loss diverges
+- Too small: learns very slowly, may get stuck
+
+In code:
+
+```
+weights[i * num_outputs + j] = weights[i * num_outputs + j] - learning_rate * grad_w[i * num_outputs + j]
+biases[j]                    = biases[j]                    - learning_rate * deltas[j]
+```
+
+---
+
+## Training Loop
+
+Training repeats forward pass, backward pass, and weight update over many **epochs**. Each epoch processes all training examples once.
+
+```
+for each epoch:
+    for each training example (input, target):
+        run_forward(head, input)         // compute z and a at every layer
+        run_backward(output, target)     // compute deltas at every layer
+        run_update(head, input, lr)      // nudge all weights and biases
+
+    compute and log average loss
+```
+
+### XOR Results
+
+XOR is the classic first test — it is not linearly separable, meaning a single layer cannot solve it. A network with one hidden layer of 4 nodes, trained for 50,000 epochs at learning rate `0.5`, produces:
+
+```
+[0.0, 0.0] → 0.001343   (target: 0)
+[0.0, 1.0] → 0.996737   (target: 1)
+[1.0, 0.0] → 0.996696   (target: 1)
+[1.0, 1.0] → 0.004978   (target: 0)
+```
+
+Loss curve:
+
+```
+Epoch 0:      0.250035   (random weights)
+Epoch 1000:   0.003609   (pattern found)
+Epoch 10000:  0.000137   (refining)
+Epoch 50000:  0.000025   (converged)
+```
 
 ---
 
 ## Implementation Reference
 
-### Layer struct
+### Layer Struct
 
 ```
-const Layer -> struct {
+pub const Layer -> struct {
     num_inputs:  int,
     num_outputs: int,
-    weights:     *float,   // size: num_inputs * num_outputs
-    biases:      *float,   // size: num_outputs
-    z:           *float,   // pre-activation, size: num_outputs
-    outputs:     *float,   // post-activation (a), size: num_outputs
+    weights:     *double,   // size: num_inputs * num_outputs
+    biases:      *double,   // size: num_outputs
+    z:           *double,   // pre-activation, size: num_outputs
+    outputs:     *double,   // post-activation (a), size: num_outputs
+    deltas:      *double,   // error signal, size: num_outputs
+    grad_w:      *double,   // weight gradients, size: num_inputs * num_outputs
+    prev:        *Layer,
     next:        *Layer,
 };
 ```
 
-### Key functions
+### Layer Methods
+
+| Method | Description |
+|---|---|
+| `init_weights_biases()` | Xavier weight init, biases to 0 |
+| `forward(inputs)` | Computes z and a for this layer |
+| `compute_output_delta(targets)` | Computes delta for output layer |
+| `compute_hidden_delta()` | Computes delta for hidden layer using next layer |
+| `update_weights(inputs, lr)` | Updates weights and biases via gradient descent |
+| `print_forward()` | Prints z and a vectors |
+
+### Module Functions
 
 | Function | Description |
 |---|---|
 | `init_layer(in, out)` | Allocates a layer with given dimensions |
-| `init_weights_biases()` | Xavier weight init, biases to 0 |
-| `forward(inputs)` | Computes z and a for this layer |
-| `print_forward()` | Prints z and a vectors |
-| `free_layer(l)` | Frees all heap memory recursively |
+| `link_layers(head)` | Infers and sets all prev pointers from next pointers |
 | `iter_init(l)` | Creates an iterator over the layer linked list |
+| `free_layer(l)` | Frees all heap memory recursively |
+| `run_forward(head, inputs)` | Runs forward pass through entire network |
+| `run_backward(output, target)` | Runs backward pass through entire network |
+| `run_update(head, inputs, lr)` | Updates all weights through entire network |
 | `mse_loss(outputs, targets, n)` | Computes mean squared error |
 
-### Memory layout
+### Memory Layout
 
-All weight/bias/activation arrays are heap-allocated via `alloc` and must be freed with `free_layer`. The `next` pointer links layers into a singly linked list. Stack-allocated layers must not be freed via `free_layer`'s recursive `free(l.next)` path only heap-allocated next pointers should be freed.
-
----
-
-## What's Next
-
-The network can currently **predict** but not **learn**. Learning requires:
-
-1. **Backpropagation** — compute how much each weight contributed to the loss by working backwards through the chain rule
-2. **Gradient descent** — nudge each weight in the direction that reduces loss
-3. **Training loop** — repeat forward pass + backprop over many examples until loss converges
+All weight/bias/activation arrays are heap-allocated via `alloc` and freed with `free_layer`. The `next` pointer links layers into a singly linked list. `prev` pointers are inferred automatically by `link_layers` — you only need to set `next` manually. Stack-allocated layers must not have `free` called on the struct pointer itself, only on their heap-allocated field arrays.

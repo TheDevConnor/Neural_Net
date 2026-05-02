@@ -112,6 +112,6 @@ Loss: 0.297306
 - [x] Forward pass (z and a)
 - [x] Sigmoid activation
 - [x] MSE loss
-- [ ] Backpropagation
-- [ ] Weight updates (gradient descent)
-- [ ] Training loop
+- [x] Backpropagation
+- [x] Weight updates (gradient descent)
+- [x] Training loop
