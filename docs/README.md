@@ -1,6 +1,6 @@
 # neural_net
 
-A feedforward neural network built from scratch in [Luma](https://luma-website-mu.vercel.app/), compiled to native code via LLVM. No ML libraries — just weights, matrix math, and sigmoid.
+A feedforward neural network built from scratch in [Luma](https://luma-website-mu.vercel.app/), compiled to native code via LLVM. No ML libraries, just weights, matrix math, and sigmoid.
 
 ## Architecture
 
@@ -15,6 +15,8 @@ Each layer is fully connected to the next. Every connection has a weight, every 
 
 ```
 src/
+  testing/
+    test.lx     — test suit for the neurl netd
   main.lx       — entry point, network setup and forward pass
   layer.lx      — Layer struct, LayerIterable, forward pass, weight init
   helper.lx     — random_float utility

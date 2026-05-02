@@ -18,19 +18,18 @@
 
 ## Notation
 
-| Symbol        | Meaning                                              |
-|---------------|------------------------------------------------------|
-| `l`           | Layer index (0 = input, 1 = first hidden, ...)       |
-| `z^[l]`       | Pre-activation column vector for layer `l`           |
-| `a^[l]`       | Post-activation column vector for layer `l`          |
-| `W^[l]`       | Weight matrix connecting layer `l-1` to layer `l`   |
-| `b^[l]`       | Bias vector for layer `l`                            |
-| `g(z)`        | Activation function applied to `z`                   |
-| `g'(z)`       | Derivative of the activation function                |
-| `δ^[l]`       | Delta (error signal) for layer `l`                   |
-| `∂L/∂w`       | Gradient of the loss with respect to a weight        |
-| `α`           | Learning rate                                        |
-
+| Symbol | Meaning |
+|--------|---------|
+| $l$ | Layer index (0 = input, 1 = first hidden, ...) |
+| $z^{[l]}$ | Pre-activation column vector for layer $l$ |
+| $a^{[l]}$ | Post-activation column vector for layer $l$ |
+| $W^{[l]}$ | Weight matrix connecting layer $l-1$ to layer $l$ |
+| $b^{[l]}$ | Bias vector for layer $l$ |
+| $g(z)$ | Activation function applied to $z$ |
+| $g'(z)$ | Derivative of the activation function |
+| $\delta^{[l]}$ | Delta (error signal) for layer $l$ |
+| $\frac{\partial L}{\partial w}$ | Gradient of loss w.r.t. a weight |
+| $\alpha$ | Learning rate |
 ---
 
 ## Network Structure
@@ -121,15 +120,11 @@ The forward pass propagates inputs through every layer to produce a final output
 
 Matrix multiply the weight matrix by the activations from the previous layer, then add the bias vector:
 
-```
-z^[l] = W^[l] · a^[l-1] + b^[l]
-```
+$$z^{[l]} = W^{[l]} \cdot a^{[l-1]} + b^{[l]}$$
 
 In code, for each output node `j`:
 
-```
-z[j] = bias[j] + sum over i of (inputs[i] * weights[i * num_outputs + j])
-```
+$$z_j = b_j + \sum_{i} a_i \cdot w_{ij}$$
 
 `z^[l]` is the **unprocessed** output of the raw weighted sums before any activation.
 
@@ -137,9 +132,7 @@ z[j] = bias[j] + sum over i of (inputs[i] * weights[i * num_outputs + j])
 
 Pass each `z` value through the activation function `g`:
 
-```
-a^[l] = g(z^[l])
-```
+$$a^{[l]} = g(z^{[l]})$$
 
 `a^[l]` is the **final** output of the layer, and becomes the input `a^[l-1]` for the next layer.
 
@@ -169,9 +162,7 @@ An activation function must be:
 
 ### Sigmoid
 
-```
-g(z) = 1 / (1 + e^(-z))
-```
+$$g(z) = \frac{1}{1 + e^{-z}}$$
 
 Output range: `(0, 1)`
 
@@ -190,17 +181,13 @@ Implementation note: clamp `z` to `(-500, 500)` before computing `exp` to preven
 
 The derivative of sigmoid has a convenient form it can be expressed entirely in terms of the sigmoid output itself:
 
-```
-g'(z) = g(z) × (1 - g(z))
-```
+$$g'(z) = g(z) \cdot (1 - g(z))$$
 
 Since `g(z)` is already stored in `outputs` from the forward pass, no recomputation is needed during backpropagation.
 
 ### ReLU (for later)
 
-```
-g(z) = max(0, z)
-```
+$$g(z) = \max(0, z)$$
 
 More common in modern networks for hidden layers. Not used here yet.
 
@@ -212,15 +199,11 @@ The loss function measures **how wrong the network's prediction is**. The goal o
 
 ### Mean Squared Error (MSE)
 
-```
-loss = (output - target)^2
-```
+$$loss = (output - target)^2$$
 
 For multiple outputs:
 
-```
-loss = (1/n) × sum((output[i] - target[i])^2)
-```
+$$\mathcal{L} = \frac{1}{n} \sum_{i=1}^{n} (a_i - \hat{y}_i)^2$$
 
 A loss of `0` means perfect prediction. The loss decreases as the network learns.
 
@@ -242,23 +225,17 @@ For each layer we compute **delta** `δ^[l]`, the error signal for that layer. I
 
 **Output layer delta:**
 
-```
-δ^[L] = (a^[L] - target) × g'(z^[L])
-```
+$$\delta^{[L]} = (a^{[L]} - \text{target}) \cdot g'(z^{[L]})$$
 
 Expanding `g'` using the sigmoid derivative property:
 
-```
-δ[j] = (outputs[j] - target[j]) × outputs[j] × (1 - outputs[j])
-```
+$$\delta_j = (a_j - \hat{y}_j) \cdot a_j \cdot (1 - a_j)$$
 
 **Hidden layer delta:**
 
 Hidden layers have no target to compare against. Instead the error signal flows backwards from the next layer:
 
-```
-δ^[l] = (W^[l+1]ᵀ · δ^[l+1]) × g'(z^[l])
-```
+$$\delta^{[l]} = (W^{[l+1]\top} \cdot \delta^{[l+1]}) \cdot g'(z^{[l]})$$
 
 In code, for each node `i` in the hidden layer:
 
@@ -273,9 +250,7 @@ This is why `prev` and `next` pointers are needed. The hidden delta reads from t
 
 Once deltas are computed, the gradient for each weight is:
 
-```
-∂L/∂w[i][j] = a^[l-1][i] × δ^[l][j]
-```
+$$\frac{\partial L}{\partial w_{ij}} = a^{[l-1]}_i \cdot \delta^{[l]}_j$$
 
 In code:
 
@@ -285,9 +260,7 @@ grad_w[i * num_outputs + j] = inputs[i] * deltas[j]
 
 The gradient for each bias is simply the delta itself:
 
-```
-∂L/∂b[j] = δ^[l][j]
-```
+$$\frac{\partial L}{\partial b_j} = \delta^{[l]}_j$$
 
 ### Backward Pass Order
 
@@ -306,10 +279,8 @@ This is the mirror of the forward pass. The error flows right to left, just as i
 
 Once gradients are known, weights and biases are nudged in the direction that reduces the loss:
 
-```
-w = w - α × ∂L/∂w
-b = b - α × ∂L/∂b
-```
+$$w = w - \alpha \cdot \frac{\partial L}{\partial w}$$
+$$b = b - \alpha \cdot \delta$$
 
 Where `α` (learning rate) is a small constant like `0.5` or `1.0` that controls the step size.
 
