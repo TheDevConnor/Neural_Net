@@ -12,6 +12,8 @@ pub const Layer -> struct {
     biases:  *double,
     z:       *double,
     outputs: *double,
+    deltas:  *double,
+    grad_w:  *double,
 
     prev: *Layer,
     next: *Layer,
@@ -37,6 +39,37 @@ pub const Layer -> struct {
         }
         loop [j: int = 0](j < self.num_outputs) : (++j) {
             self.outputs[j] = helper::sigmoid(self.z[j]);
+        }
+    },
+
+    compute_output_delta -> fn (targets: *double) void {
+        loop [j: int = 0](j < self.num_outputs) : (++j) {
+            let sig_prime: double = self.outputs[j] * (1.0 - self.outputs[j]);
+            self.deltas[j] = (self.outputs[j] - targets[j]) * sig_prime;
+        }
+    },
+
+    compute_hidden_delta -> fn () void {
+        loop [i: int = 0](i < self.num_outputs) : (++i) {
+            let error: double = 0.0;
+            loop [j: int = 0](j < self.next.num_outputs) : (++j) {
+                error = error + self.next.weights[i * self.next.num_outputs + j] * self.next.deltas[j];
+            }
+            let sig_prime: double = self.outputs[i] * (1.0 - self.outputs[i]);
+            self.deltas[i] = error * sig_prime;
+        }
+    },
+
+    update_weights -> fn (inputs: *double, learning_rate: double) void {
+        loop [i: int = 0](i < self.num_inputs) : (++i) {
+            loop [j: int = 0](j < self.num_outputs) : (++j) {
+                self.grad_w[i * self.num_outputs + j] = inputs[i] * self.deltas[j];
+                self.weights[i * self.num_outputs + j] = self.weights[i * self.num_outputs + j] 
+                    - learning_rate * self.grad_w[i * self.num_outputs + j];
+            }
+        }
+        loop [j: int = 0](j < self.num_outputs) : (++j) {
+            self.biases[j] = self.biases[j] - learning_rate * self.deltas[j];
         }
     },
 
@@ -87,6 +120,8 @@ pub const init_layer -> fn (num_inputs: int, num_outputs: int) Layer {
         biases:  cast<*double>(alloc(num_outputs * sizeof<double>)),
         z:       cast<*double>(alloc(num_outputs * sizeof<double>)),
         outputs: cast<*double>(alloc(num_outputs * sizeof<double>)),
+        deltas:  cast<*double>(alloc(num_outputs * sizeof<double>)),
+        grad_w:  cast<*double>(alloc(num_inputs * num_outputs * sizeof<double>)),
         prev:    cast<*Layer>(0),
         next:    cast<*Layer>(0),
     };
@@ -116,6 +151,8 @@ pub const free_layer -> fn (l: *Layer) void {
     free(l.weights);
     free(l.biases);
     free(l.outputs);
+    free(l.deltas);
+    free(l.grad_w);
     free(l.z);
 
     if (l.next != cast<*Layer>(0)) 
