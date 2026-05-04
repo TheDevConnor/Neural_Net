@@ -10,6 +10,7 @@ pub const main -> fn () int {
 
     layer_tests::layer_run();
     gate_tests::gate_run();
-    
+    gate_tests::hidden_size_run();
+
     return 0;
 }
