@@ -1,6 +1,8 @@
 @module "layer"
 
 @use "std_libc" as libc
+@use "std_io" as io
+
 @use "helper" as helper
 
 pub const Layer -> struct {
@@ -18,7 +20,7 @@ pub const Layer -> struct {
     next: *Layer,
 
     init_weights_biases -> fn () void {
-        let limit: double = 1.0 / libc::sqrt(cast<double>(self.num_inputs));
+        let limit: double = libc::sqrt(6 / cast<double>(self.num_inputs + self.num_outputs));
         let n: int = self.num_inputs * self.num_outputs;
         loop [i: int = 0](i < n) : (++i) {
             self.weights[i] = helper::random_double(-limit, limit);
@@ -184,6 +186,54 @@ pub const run_update -> fn (head: *Layer, inputs: *double, learning_rate: double
         let l: *Layer = it.next();
         l.update_weights(l.prev.outputs, learning_rate);
     }
+}
+
+const save_weights_fd -> fn (l: *Layer, fd: int) void {
+    io::local_write(fd, cast<*void>(&l.num_inputs),  sizeof<int>);
+    io::local_write(fd, cast<*void>(&l.num_outputs), sizeof<int>);
+
+    let weight_bytes: int = l.num_inputs * l.num_outputs * sizeof<double>;
+    let bias_bytes:   int = l.num_outputs * sizeof<double>;
+    io::local_write(fd, cast<*void>(l.weights), weight_bytes);
+    io::local_write(fd, cast<*void>(l.biases),  bias_bytes);
+
+    if (l.next != cast<*Layer>(0))
+        save_weights_fd(l.next, fd);
+}
+
+const load_weights_fd -> fn (l: *Layer, fd: int) void {
+    let tmp_inputs:  int = 0;
+    let tmp_outputs: int = 0;
+    io::local_read(fd, cast<*void>(&tmp_inputs),  sizeof<int>);
+    io::local_read(fd, cast<*void>(&tmp_outputs), sizeof<int>);
+
+    let weight_bytes: int = l.num_inputs * l.num_outputs * sizeof<double>;
+    let bias_bytes:   int = l.num_outputs * sizeof<double>;
+    io::local_read(fd, cast<*void>(l.weights), weight_bytes);
+    io::local_read(fd, cast<*void>(l.biases),  bias_bytes);
+
+    if (l.next != cast<*Layer>(0))
+        load_weights_fd(l.next, fd);
+}
+
+pub const save_weights -> fn (l: *Layer, path: *byte) void {
+    let fd: int = io::local_open_create(path);
+    if (io::local_is_error(fd)) {
+        output("Error: Could not open file for writing: ", path, "\n");
+        return;
+    }
+    save_weights_fd(l, fd);
+    io::local_close(fd);
+}
+
+pub const load_weights -> fn (l: *Layer, path: *byte) void {
+    let fd: int = io::local_open_read(path);
+    if (io::local_is_error(fd)) {
+        output("Error: Could not open file for reading: ", path, "\n");
+        return;
+    }
+    load_weights_fd(l, fd);
+    io::local_close(fd);
 }
 
 pub const mse_loss -> fn (outputs: *double, targets: *double, n: int) double {
